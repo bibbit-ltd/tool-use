@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "axios": "^1.7.9",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "zod-to-json-schema": "^3.24.1"
   }
 }
