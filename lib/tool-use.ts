@@ -1,6 +1,7 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
 import zodToJsonSchema from 'zod-to-json-schema';
+import { produce } from "immer"
 
 dotenv.config();
 
@@ -95,6 +96,7 @@ export class AnthropicClient {
     private model: string = 'claude-3-5-sonnet-20241022';
     private maxTokens: number = 1024;
     private messages: AnthropicRequest['messages'] = [];
+    private lastAssistantResponse: AnthropicResponse | null = null;
 
     constructor(apiKey?: string, model?: string, maxTokens?: number) {
         this.apiKey = apiKey || process.env.ANTHROPIC_API_KEY || '';
@@ -111,15 +113,13 @@ export class AnthropicClient {
     }
 
     async createMessage(messages: AnthropicRequest['messages']): Promise<AnthropicResponse> {
-        // Reset conversation if it's a new user message
-        if (messages.length === 1 && messages[0].role === 'user') {
-            this.messages = [];
-        }
-
-        this.messages = [...this.messages, ...messages];
+        // Never replace messages, only append
+        this.messages = produce(this.messages, draft => {
+            messages.forEach(msg => draft.push(msg));
+        });
 
         try {
-            console.log('\n🔵 Sending message to Anthropic:', JSON.stringify(this.messages, null, 2));
+            console.log('\n🔵 Sending full conversation to Anthropic:', JSON.stringify(this.messages, null, 2));
 
             const request: AnthropicRequest = {
                 model: this.model,
@@ -139,7 +139,16 @@ export class AnthropicClient {
                 }
             );
 
-            console.log('\n🟣 Received response from Anthropic:', JSON.stringify(response.data, null, 2));
+            console.log('\nResponse:', JSON.stringify(response.data, null, 2));
+
+            // Store assistant responses in history without the id field
+            this.messages = produce(this.messages, draft => {
+                draft.push({
+                    role: 'assistant',
+                    content: response.data.content
+                });
+            });
+
             return await this.handleResponse(response.data);
         } catch (error) {
             if (axios.isAxiosError(error)) {
@@ -154,8 +163,12 @@ export class AnthropicClient {
     private async handleResponse(response: AnthropicResponse): Promise<AnthropicResponse> {
         if (response.stop_reason !== 'tool_use') {
             console.log('\n🟢 Final response (no tools to call):', JSON.stringify(response, null, 2));
+            this.lastAssistantResponse = null; // Clear last response on final response
             return response;
         }
+
+        // Store the assistant's response for the next message
+        this.lastAssistantResponse = response;
 
         console.log('\n🟡 Tool use requested, processing tools...');
 

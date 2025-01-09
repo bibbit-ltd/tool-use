@@ -15,17 +15,32 @@ async function main() {
         description: 'Get the current weather for a specified location',
         input_schema: weatherSchema
     },
-        async (location: string) => { return { temperature: 18, condition: 'Partly cloudy', humidity: 75, unit: 'celsius' } }
+        async (location: string) => { return { temperature: 18, condition: 'Heavy Rain', humidity: 75, unit: 'celsius' } }
+    );
+
+    const trafficTool = new Tool({
+        name: 'getTraffic',
+        description: 'Get the current traffic for a specified location',
+        input_schema: z.object({
+            traffic: z.string().describe('The traffic status for the specified location'),
+            status: z.string().describe('The traffic status for the specified location'),
+            unit: z.string().describe('The unit of measurement for the traffic status')
+        })
+    },
+        async (weather: string) => { return { traffic: 'Heavy', status: 'Slow', unit: '10 miles per hour' } }
     );
 
     try {
-        const response = await llm.addTool(weatherTool).createMessage(
-            [
-                {
-                    role: 'user',
-                    content: 'What is the weather like in San Francisco?',
-                },
-            ]);
+        const response = await llm
+            .addTool(weatherTool)
+            .addTool(trafficTool)
+            .createMessage(
+                [
+                    {
+                        role: 'user',
+                        content: 'What is the weather like in San Francisco? Is the weather affecting the traffic?',
+                    },
+                ]);
 
         console.log('Response:', JSON.stringify(response, null, 2));
 
